@@ -355,34 +355,43 @@ local originalFOV = 70
 local isAimbotEnabled = false
 local isChamsEnabled = false
 local isAiming = false
-local isSpinBotEnabled = false
 local isStrafeEnabled = false
 local isPlayerGlowEnabled = false
 local isTriggerBotEnabled = false
 local isSpeedHackEnabled = false
 local isBunnyHopEnabled = false
-local isJumpCirclesEnabled = false
 local isPingDisplayEnabled = false
 local isFPSDisplayEnabled = false
 local aimConnection = nil
-local spinBotConnection = nil
 local strafeConnection = nil
 local triggerConnection = nil
 local speedHackConnection = nil
 local bunnyHopConnection = nil
-local jumpCirclesConnection = nil
 
 -- Новые визуальные функции
 local isCustomSkyEnabled = false
-local isCustomCrosshairEnabled = false
 local isXRayEnabled = false
 local isModelChangerEnabled = false
+
+-- WorldModulation настройки
+local worldModulationSettings = {
+    timeOfDay = "Day", -- Day or Night
+    fog = false,
+    shadows = true,
+    customSky = false
+}
 
 -- Настройки Aimbot
 local aimbotSettings = {
     tracers = false,
-    tracerColor = Color3.fromRGB(101, 218, 255) -- Aurora Cyan
+    tracerColor = Color3.fromRGB(101, 218, 255), -- Aurora Cyan
+    mode = "Normal", -- Normal or Silent
+    showTargetGui = false
 }
+
+-- TargetGui переменная
+local targetGui = nil
+local currentTarget = nil
 
 -- Переменные для приветственного экрана
 local welcomeScreen = nil
@@ -427,16 +436,6 @@ local bunnyHopSettings = {
     jumpCount = 0
 }
 
--- Настройки Custom Crosshair
-local crosshairSettings = {
-    enabled = false,
-    type = "Cross", -- Cross, Dot, Circle, Square
-    size = 10,
-    thickness = 2,
-    color = Color3.fromRGB(255, 255, 255),
-    gap = 3,
-    outline = true
-}
 
 -- Настройки ModelChanger
 local modelChangerSettings = {
@@ -467,12 +466,10 @@ local chamsInstances = {}
 local nameLabels = {}
 local distanceLabels = {}
 local bulletTracers = {}
-local jumpCircles = {}
 local pingDisplay = nil
 local fpsDisplay = nil
 
 -- Новые визуальные элементы
-local customCrosshairGui = nil
 local originalSkybox = nil
 
 -- Глобальные переменные для элементов GUI
@@ -832,179 +829,119 @@ end
 -- НОВЫЕ ВИЗУАЛЬНЫЕ ФУНКЦИИ
 -- ========================================
 
--- Custom Sky функция
-local function enableCustomSky()
-    if isCustomSkyEnabled then return end
+-- ========================================
+-- WORLD MODULATION ФУНКЦИИ
+-- ========================================
+
+local function applyWorldModulation()
+    local Lighting = game:GetService("Lighting")
     
-    -- Сохраняем оригинальное небо
-    if not originalSkybox then
-        originalSkybox = {}
+    -- Time of Day
+    if worldModulationSettings.timeOfDay == "Night" then
+        Lighting.ClockTime = 0
+        Lighting.Brightness = 0.5
+        Lighting.Ambient = Color3.fromRGB(50, 50, 70)
+        Lighting.OutdoorAmbient = Color3.fromRGB(50, 50, 70)
+        Lighting.ColorShift_Top = Color3.fromRGB(135, 206, 250)
+    else -- Day
+        Lighting.ClockTime = 14
+        Lighting.Brightness = 2
+        Lighting.Ambient = Color3.fromRGB(170, 170, 170)
+        Lighting.OutdoorAmbient = Color3.fromRGB(170, 170, 170)
+        Lighting.ColorShift_Top = Color3.fromRGB(255, 255, 255)
+    end
+    
+    -- Fog - правильное выключение
+    if worldModulationSettings.fog then
+        Lighting.FogEnd = 500
+        Lighting.FogStart = 0
+        Lighting.FogColor = Color3.fromRGB(192, 192, 192)
+    else
+        -- Полностью убираем туман
+        Lighting.FogEnd = 100000000
+        Lighting.FogStart = 0
+    end
+    
+    -- Shadows - правильное выключение
+    Lighting.GlobalShadows = worldModulationSettings.shadows
+    
+    -- Custom Sky в зависимости от времени суток
+    if worldModulationSettings.customSky then
+        -- Удаляем существующее небо
         for _, sky in pairs(Lighting:GetChildren()) do
             if sky:IsA("Sky") then
-                originalSkybox[sky] = true
+                sky:Destroy()
             end
         end
-    end
-    
-    -- Удаляем существующее небо
-    for _, sky in pairs(Lighting:GetChildren()) do
-        if sky:IsA("Sky") then
-            sky:Destroy()
+        
+        local sky = Instance.new("Sky")
+        
+        if worldModulationSettings.timeOfDay == "Night" then
+            -- Чёрное небо с бело-голубой кометой для ночи
+            sky.SkyboxBk = "rbxassetid://8139677359"
+            sky.SkyboxDn = "rbxassetid://8139677253"
+            sky.SkyboxFt = "rbxassetid://8139677111"
+            sky.SkyboxLf = "rbxassetid://8139676988"
+            sky.SkyboxRt = "rbxassetid://8139676842"
+            sky.SkyboxUp = "rbxassetid://8139676647"
+            sky.SunAngularSize = 0
+            sky.MoonAngularSize = 15
+            sky.StarCount = 5000
+            sky.Parent = Lighting
+            
+            -- Атмосфера для ночи с кометой
+            local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+            if not atmosphere then
+                atmosphere = Instance.new("Atmosphere")
+                atmosphere.Parent = Lighting
+            end
+            atmosphere.Density = 0.4
+            atmosphere.Offset = 0.3
+            atmosphere.Color = Color3.fromRGB(150, 200, 255)
+            atmosphere.Decay = Color3.fromRGB(30, 50, 80)
+            atmosphere.Glare = 0.5
+            atmosphere.Haze = 0.8
+        else
+            -- Северное сияние для дня
+            sky.SkyboxBk = "rbxassetid://159454299"
+            sky.SkyboxDn = "rbxassetid://159454296"
+            sky.SkyboxFt = "rbxassetid://159454293"
+            sky.SkyboxLf = "rbxassetid://159454286"
+            sky.SkyboxRt = "rbxassetid://159454300"
+            sky.SkyboxUp = "rbxassetid://159454288"
+            sky.SunAngularSize = 0
+            sky.MoonAngularSize = 11
+            sky.StarCount = 3000
+            sky.Parent = Lighting
+            
+            -- Атмосфера для северного сияния
+            local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+            if not atmosphere then
+                atmosphere = Instance.new("Atmosphere")
+                atmosphere.Parent = Lighting
+            end
+            atmosphere.Density = 0.35
+            atmosphere.Offset = 0.5
+            atmosphere.Color = Color3.fromRGB(100, 255, 200)
+            atmosphere.Decay = Color3.fromRGB(50, 100, 150)
+            atmosphere.Glare = 0.2
+            atmosphere.Haze = 1.5
         end
-    end
-    
-    -- Создаем кастомное небо
-    local sky = Instance.new("Sky")
-    sky.SkyboxBk = "rbxassetid://570557514"  -- Задняя текстура
-    sky.SkyboxDn = "rbxassetid://570557551"  -- Нижняя текстура
-    sky.SkyboxFt = "rbxassetid://570557524"  -- Передняя текстура
-    sky.SkyboxLf = "rbxassetid://570557537"  -- Левая текстура
-    sky.SkyboxRt = "rbxassetid://570557541"  -- Правая текстура
-    sky.SkyboxUp = "rbxassetid://570557466"  -- Верхняя текстура
-    sky.Parent = Lighting
-    
-    isCustomSkyEnabled = true
-    showNotification("Custom Sky Enabled!")
-end
-
-local function disableCustomSky()
-    if not isCustomSkyEnabled then return end
-    
-    -- Удаляем кастомное небо
-    for _, sky in pairs(Lighting:GetChildren()) do
-        if sky:IsA("Sky") then
-            sky:Destroy()
-        end
-    end
-    
-    -- Восстанавливаем оригинальное небо (если возможно)
-    if originalSkybox then
-        -- В Roblox нельзя напрямую восстановить оригинальное небо,
-        -- поэтому просто оставляем стандартное
-    end
-    
-    isCustomSkyEnabled = false
-    showNotification("Custom Sky Disabled!")
-end
-
--- Custom Crosshair функция
-local function createCustomCrosshair()
-    if customCrosshairGui then
-        customCrosshairGui:Destroy()
-        customCrosshairGui = nil
-    end
-    
-    if not crosshairSettings.enabled then return end
-    
-    customCrosshairGui = Instance.new("ScreenGui")
-    customCrosshairGui.Name = "CustomCrosshair"
-    customCrosshairGui.ResetOnSpawn = false
-    customCrosshairGui.Parent = game:GetService("CoreGui")
-    
-    local center = Instance.new("Frame")
-    center.Size = UDim2.new(0, crosshairSettings.thickness, 0, crosshairSettings.thickness)
-    center.Position = UDim2.new(0.5, -crosshairSettings.thickness/2, 0.5, -crosshairSettings.thickness/2)
-    center.BackgroundColor3 = crosshairSettings.color
-    center.BorderSizePixel = 0
-    center.Parent = customCrosshairGui
-    
-    if crosshairSettings.type == "Cross" then
-        -- Горизонтальная линия
-        local horizontal = Instance.new("Frame")
-        horizontal.Size = UDim2.new(0, crosshairSettings.size, 0, crosshairSettings.thickness)
-        horizontal.Position = UDim2.new(0.5, -crosshairSettings.size/2, 0.5, -crosshairSettings.thickness/2)
-        horizontal.BackgroundColor3 = crosshairSettings.color
-        horizontal.BorderSizePixel = 0
-        horizontal.Parent = customCrosshairGui
-        
-        -- Вертикальная линия
-        local vertical = Instance.new("Frame")
-        vertical.Size = UDim2.new(0, crosshairSettings.thickness, 0, crosshairSettings.size)
-        vertical.Position = UDim2.new(0.5, -crosshairSettings.thickness/2, 0.5, -crosshairSettings.size/2)
-        vertical.BackgroundColor3 = crosshairSettings.color
-        vertical.BorderSizePixel = 0
-        vertical.Parent = customCrosshairGui
-        
-        -- Обводка
-        if crosshairSettings.outline then
-            local outlineColor = Color3.new(
-                1 - crosshairSettings.color.R,
-                1 - crosshairSettings.color.G, 
-                1 - crosshairSettings.color.B
-            )
-            
-            -- Обводка для горизонтальной линии
-            local horizontalOutline1 = Instance.new("Frame")
-            horizontalOutline1.Size = UDim2.new(0, crosshairSettings.size + 2, 0, 1)
-            horizontalOutline1.Position = UDim2.new(0.5, -(crosshairSettings.size + 2)/2, 0.5, -crosshairSettings.thickness/2 - 1)
-            horizontalOutline1.BackgroundColor3 = outlineColor
-            horizontalOutline1.BorderSizePixel = 0
-            horizontalOutline1.ZIndex = -1
-            horizontalOutline1.Parent = customCrosshairGui
-            
-            local horizontalOutline2 = Instance.new("Frame")
-            horizontalOutline2.Size = UDim2.new(0, crosshairSettings.size + 2, 0, 1)
-            horizontalOutline2.Position = UDim2.new(0.5, -(crosshairSettings.size + 2)/2, 0.5, crosshairSettings.thickness/2)
-            horizontalOutline2.BackgroundColor3 = outlineColor
-            horizontalOutline2.BorderSizePixel = 0
-            horizontalOutline2.ZIndex = -1
-            horizontalOutline2.Parent = customCrosshairGui
-            
-            -- Обводка для вертикальной линии
-            local verticalOutline1 = Instance.new("Frame")
-            verticalOutline1.Size = UDim2.new(0, 1, 0, crosshairSettings.size + 2)
-            verticalOutline1.Position = UDim2.new(0.5, -crosshairSettings.thickness/2 - 1, 0.5, -(crosshairSettings.size + 2)/2)
-            verticalOutline1.BackgroundColor3 = outlineColor
-            verticalOutline1.BorderSizePixel = 0
-            verticalOutline1.ZIndex = -1
-            verticalOutline1.Parent = customCrosshairGui
-            
-            local verticalOutline2 = Instance.new("Frame")
-            verticalOutline2.Size = UDim2.new(0, 1, 0, crosshairSettings.size + 2)
-            verticalOutline2.Position = UDim2.new(0.5, crosshairSettings.thickness/2, 0.5, -(crosshairSettings.size + 2)/2)
-            verticalOutline2.BackgroundColor3 = outlineColor
-            verticalOutline2.BorderSizePixel = 0
-            verticalOutline2.ZIndex = -1
-            verticalOutline2.Parent = customCrosshairGui
-        end
-        
-    elseif crosshairSettings.type == "Dot" then
-        local dot = Instance.new("Frame")
-        dot.Size = UDim2.new(0, crosshairSettings.size, 0, crosshairSettings.size)
-        dot.Position = UDim2.new(0.5, -crosshairSettings.size/2, 0.5, -crosshairSettings.size/2)
-        dot.BackgroundColor3 = crosshairSettings.color
-        dot.BorderSizePixel = 0
-        
-        local dotCorner = Instance.new("UICorner")
-        dotCorner.CornerRadius = UDim.new(1, 0)
-        dotCorner.Parent = dot
-        
-        dot.Parent = customCrosshairGui
-        
-    elseif crosshairSettings.type == "Circle" then
-        local circle = Instance.new("ImageLabel")
-        circle.Size = UDim2.new(0, crosshairSettings.size, 0, crosshairSettings.size)
-        circle.Position = UDim2.new(0.5, -crosshairSettings.size/2, 0.5, -crosshairSettings.size/2)
-        circle.BackgroundTransparency = 1
-        circle.Image = "rbxassetid://5533218378"
-        circle.ImageColor3 = crosshairSettings.color
-        circle.Parent = customCrosshairGui
-    end
-end
-
-local function updateCustomCrosshair()
-    if customCrosshairGui then
-        customCrosshairGui:Destroy()
-        customCrosshairGui = nil
-    end
-    
-    if crosshairSettings.enabled then
-        createCustomCrosshair()
-        showNotification("Custom Crosshair Enabled!")
     else
-        showNotification("Custom Crosshair Disabled!")
+        -- Удаляем кастомное небо
+        for _, sky in pairs(Lighting:GetChildren()) do
+            if sky:IsA("Sky") then
+                sky:Destroy()
+            end
+        end
+        -- Удаляем атмосферу
+        local atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
+        if atmosphere then
+            atmosphere:Destroy()
+        end
     end
 end
+
 
 -- X-Ray функция
 local function enableXRay()
@@ -1308,6 +1245,168 @@ local function stopTracers()
     showNotification("Bullet Tracers Disabled!")
 end
 
+-- Функция для создания TargetGui
+-- Создание постоянного TargetGui
+local function createTargetGui()
+    -- Удаляем старый GUI если существует
+    if targetGui and targetGui.Parent then
+        pcall(function()
+            targetGui:Destroy()
+        end)
+        targetGui = nil
+    end
+    
+    if not aimbotSettings.showTargetGui then return end
+    
+    local targetGuiScreen = Instance.new("ScreenGui")
+    targetGuiScreen.Name = "TargetGui"
+    targetGuiScreen.ResetOnSpawn = false
+    targetGuiScreen.Parent = game:GetService("CoreGui")
+    
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 190, 0, 95)
+    mainFrame.Position = UDim2.new(0.5, -95, 0.7, 0)
+    mainFrame.BackgroundColor3 = GUI_COLORS.mainBackground
+    mainFrame.BackgroundTransparency = 0.2
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Parent = targetGuiScreen
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = mainFrame
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = GUI_COLORS.accent
+    stroke.Thickness = 1.5
+    stroke.Transparency = 0.3
+    stroke.Parent = mainFrame
+    
+    -- Аватарка слева
+    local avatar = Instance.new("ImageLabel")
+    avatar.Name = "Avatar"
+    avatar.Size = UDim2.new(0, 85, 0, 85)
+    avatar.Position = UDim2.new(0, 5, 0, 5)
+    avatar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    avatar.BorderSizePixel = 0
+    avatar.Image = ""
+    avatar.Parent = mainFrame
+    
+    local avatarCorner = Instance.new("UICorner")
+    avatarCorner.CornerRadius = UDim.new(0, 6)
+    avatarCorner.Parent = avatar
+    
+    -- UserName сверху справа
+    local userName = Instance.new("TextLabel")
+    userName.Name = "UserName"
+    userName.Size = UDim2.new(0, 90, 0, 30)
+    userName.Position = UDim2.new(0, 95, 0, 10)
+    userName.BackgroundTransparency = 1
+    userName.Text = "Nobody Locked"
+    userName.TextColor3 = TEXT_COLOR
+    userName.TextSize = 14
+    userName.Font = Enum.Font.GothamBold
+    userName.TextXAlignment = Enum.TextXAlignment.Left
+    userName.TextYAlignment = Enum.TextYAlignment.Top
+    userName.TextTruncate = Enum.TextTruncate.AtEnd
+    userName.Parent = mainFrame
+    
+    -- DisplayName под UserName
+    local displayName = Instance.new("TextLabel")
+    displayName.Name = "DisplayName"
+    displayName.Size = UDim2.new(0, 90, 0, 25)
+    displayName.Position = UDim2.new(0, 95, 0, 35)
+    displayName.BackgroundTransparency = 1
+    displayName.Text = ""
+    displayName.TextColor3 = GUI_COLORS.disabled
+    displayName.TextSize = 11
+    displayName.Font = Enum.Font.Gotham
+    displayName.TextXAlignment = Enum.TextXAlignment.Left
+    displayName.TextYAlignment = Enum.TextYAlignment.Top
+    displayName.TextTruncate = Enum.TextTruncate.AtEnd
+    displayName.Parent = mainFrame
+    
+    -- Здоровье
+    local healthLabel = Instance.new("TextLabel")
+    healthLabel.Name = "HealthLabel"
+    healthLabel.Size = UDim2.new(0, 90, 0, 20)
+    healthLabel.Position = UDim2.new(0, 95, 0, 65)
+    healthLabel.BackgroundTransparency = 1
+    healthLabel.Text = ""
+    healthLabel.TextColor3 = Color3.fromRGB(101, 218, 255)
+    healthLabel.TextSize = 11
+    healthLabel.Font = Enum.Font.GothamBold
+    healthLabel.TextXAlignment = Enum.TextXAlignment.Left
+    healthLabel.TextYAlignment = Enum.TextYAlignment.Top
+    healthLabel.Parent = mainFrame
+    
+    targetGui = targetGuiScreen
+end
+
+-- Переменная для подключения к обновлению HP
+local healthConnection = nil
+
+-- Обновление TargetGui
+local function updateTargetGui(targetPlayer)
+    if not targetGui or not targetGui.Parent then return end
+    
+    local mainFrame = targetGui:FindFirstChild("MainFrame")
+    if not mainFrame then return end
+    
+    local avatar = mainFrame:FindFirstChild("Avatar")
+    local userName = mainFrame:FindFirstChild("UserName")
+    local displayName = mainFrame:FindFirstChild("DisplayName")
+    local healthLabel = mainFrame:FindFirstChild("HealthLabel")
+    
+    -- Отключаем старое обновление HP
+    if healthConnection then
+        healthConnection:Disconnect()
+        healthConnection = nil
+    end
+    
+    if targetPlayer then
+        -- Обновляем информацию о цели
+        if avatar then
+            avatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. targetPlayer.UserId .. "&width=150&height=150&format=png"
+        end
+        if userName then
+            userName.Text = targetPlayer.Name
+        end
+        if displayName then
+            displayName.Text = "@" .. targetPlayer.DisplayName
+        end
+        if healthLabel and targetPlayer.Character then
+            local humanoid = targetPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                healthLabel.Text = "HP: " .. math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
+                
+                -- Подключаем динамическое обновление HP
+                healthConnection = humanoid:GetPropertyChangedSignal("Health"):Connect(function()
+                    if healthLabel and healthLabel.Parent then
+                        healthLabel.Text = "HP: " .. math.floor(humanoid.Health) .. "/" .. math.floor(humanoid.MaxHealth)
+                    end
+                end)
+            else
+                healthLabel.Text = ""
+            end
+        end
+    else
+        -- Нет цели - показываем "Nobody Locked"
+        if avatar then
+            avatar.Image = ""
+        end
+        if userName then
+            userName.Text = "Nobody Locked"
+        end
+        if displayName then
+            displayName.Text = ""
+        end
+        if healthLabel then
+            healthLabel.Text = ""
+        end
+    end
+end
+
 local function startAiming()
     if not isAimbotEnabled or not player.Character then 
         return 
@@ -1320,21 +1419,116 @@ local function startAiming()
         originalFOV = camera.FieldOfView
     end
     
-    -- Normal Aimbot
-    aimConnection = RunService.Heartbeat:Connect(function(delta)
-        if not isAiming or not isAimbotEnabled or not player.Character then 
-            if aimConnection then
-                aimConnection:Disconnect()
+    -- Проверяем режим аимбота
+    if aimbotSettings.mode == "Normal" then
+        -- Normal Aimbot - двигает камеру
+        aimConnection = RunService.Heartbeat:Connect(function(delta)
+            if not isAiming or not isAimbotEnabled or not player.Character then 
+                if aimConnection then
+                    aimConnection:Disconnect()
+                end
+                return 
             end
-            return 
-        end
+            
+            local targetHead = findTargetNearCrosshair()
+            if targetHead then
+                local camera = workspace.CurrentCamera
+                camera.CFrame = CFrame.new(camera.CFrame.Position, targetHead.Position)
+                
+                -- Обновляем TargetGui
+                if aimbotSettings.showTargetGui then
+                    local targetPlayer = Players:GetPlayerFromCharacter(targetHead.Parent)
+                    if targetPlayer ~= currentTarget then
+                        currentTarget = targetPlayer
+                        updateTargetGui(targetPlayer)
+                    end
+                end
+            else
+                -- Нет цели - показываем "Nobody Locked"
+                if aimbotSettings.showTargetGui and currentTarget then
+                    currentTarget = nil
+                    updateTargetGui(nil)
+                end
+            end
+        end)
+    elseif aimbotSettings.mode == "Silent" then
+        -- Silent Aim - мгновенно наводится на цель при выстреле, камера остаётся на месте
+        local silentTarget = nil
+        local originalCamCFrame = nil
         
-        local targetHead = findTargetNearCrosshair()
-        if targetHead then
-            local camera = workspace.CurrentCamera
-            camera.CFrame = CFrame.new(camera.CFrame.Position, targetHead.Position)
-        end
-    end)
+        aimConnection = RunService.Heartbeat:Connect(function(delta)
+            if not isAiming or not isAimbotEnabled or not player.Character then 
+                if aimConnection then
+                    aimConnection:Disconnect()
+                end
+                return 
+            end
+            
+            local targetHead = findTargetNearCrosshair()
+            if targetHead then
+                local camera = workspace.CurrentCamera
+                
+                -- Проверяем, что камера в режиме от первого лица
+                local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid and player.Character:FindFirstChild("Head") then
+                    local cameraMode = player.CameraMode
+                    local cameraDistance = (camera.CFrame.Position - player.Character.Head.Position).Magnitude
+                    
+                    -- Если камера от первого лица (расстояние < 1.5)
+                    if cameraDistance < 1.5 or cameraMode == Enum.CameraMode.LockFirstPerson then
+                        silentTarget = targetHead
+                        
+                        -- Обновляем TargetGui
+                        if aimbotSettings.showTargetGui then
+                            local targetPlayer = Players:GetPlayerFromCharacter(targetHead.Parent)
+                            if targetPlayer ~= currentTarget then
+                                currentTarget = targetPlayer
+                                updateTargetGui(targetPlayer)
+                            end
+                        end
+                    end
+                end
+            else
+                silentTarget = nil
+                -- Нет цели - показываем "Nobody Locked"
+                if aimbotSettings.showTargetGui and currentTarget then
+                    currentTarget = nil
+                    updateTargetGui(nil)
+                end
+            end
+        end)
+        
+        -- Обработчик для мгновенного наведения при выстреле (LMB)
+        local silentAimInputConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if gameProcessed then return end
+            
+            if input.UserInputType == Enum.UserInputType.MouseButton1 and isAiming and isAimbotEnabled and silentTarget then
+                local camera = workspace.CurrentCamera
+                
+                -- Сохраняем текущую позицию камеры
+                originalCamCFrame = camera.CFrame
+                
+                -- Мгновенно наводим на цель
+                camera.CFrame = CFrame.new(camera.CFrame.Position, silentTarget.Position)
+                
+                -- Возвращаем камеру обратно через 1 кадр
+                task.spawn(function()
+                    task.wait()
+                    if originalCamCFrame and camera then
+                        camera.CFrame = originalCamCFrame
+                    end
+                end)
+            end
+        end)
+        
+        -- Отключаем обработчик при выключении аимбота
+        task.spawn(function()
+            repeat task.wait() until not isAiming or not isAimbotEnabled
+            if silentAimInputConnection then
+                silentAimInputConnection:Disconnect()
+            end
+        end)
+    end
 end
 
 local function stopAiming()
@@ -1349,6 +1543,12 @@ local function stopAiming()
     if aimConnection then
         aimConnection:Disconnect()
         aimConnection = nil
+    end
+    
+    -- Показываем "Nobody Locked" когда прицеливание остановлено
+    currentTarget = nil
+    if aimbotSettings.showTargetGui then
+        updateTargetGui(nil)
     end
 end
 
@@ -1416,39 +1616,6 @@ local function stopTriggerBot()
     showNotification("TriggerBot Disabled!")
 end
 
--- SpinBot функция
-local function startSpinBot()
-    if not player.Character then return end
-    
-    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then return end
-    
-    isSpinBotEnabled = true
-    local spinSpeed = 50
-    
-    spinBotConnection = RunService.Heartbeat:Connect(function(delta)
-        if not isSpinBotEnabled or not player.Character or not humanoidRootPart then
-            if spinBotConnection then
-                spinBotConnection:Disconnect()
-                spinBotConnection = nil
-            end
-            return
-        end
-        
-        humanoidRootPart.CFrame = humanoidRootPart.CFrame * CFrame.Angles(0, math.rad(spinSpeed * delta * 60), 0)
-    end)
-    
-    showNotification("SpinBot Enabled!")
-end
-
-local function stopSpinBot()
-    isSpinBotEnabled = false
-    if spinBotConnection then
-        spinBotConnection:Disconnect()
-        spinBotConnection = nil
-    end
-    showNotification("SpinBot Disabled!")
-end
 
 -- Strafe функция с FastStop (скорость 27)
 local function startStrafe()
@@ -1637,102 +1804,6 @@ local function stopBunnyHop()
     showNotification("BunnyHop Disabled!")
 end
 
--- Jump Circles функция (круги в стороны при прыжке)
-local function createJumpCircle(position)
-    if not isJumpCirclesEnabled then return end
-    
-    -- Создаем плоский круг под игроком (радиус 3 studs)
-    local circle = Instance.new("Part")
-    circle.Name = "JumpCircle"
-    circle.Size = Vector3.new(0.2, 0.05, 0.2)  -- Очень тонкий и плоский
-    circle.Position = Vector3.new(position.X, position.Y - 3, position.Z)
-    circle.Anchored = true
-    circle.CanCollide = false
-    circle.Material = Enum.Material.Neon
-    circle.Shape = Enum.PartType.Ball  -- Используем шар чтобы получить круглую форму
-    circle.Parent = workspace
-    
-    -- Цвета от сиреневого к ярко фиолетовому
-    circle.Color = Color3.fromRGB(186, 85, 211)  -- MediumOrchid (сиреневый)
-    
-    table.insert(jumpCircles, circle)
-    
-    -- Анимация: плавное увеличение до 6 studs в диаметре
-    spawn(function()
-        local targetSize = 6  -- 3 studs в каждую сторону
-        local growthTime = 0.4
-        local fadeTime = 0.6
-        
-        -- Плавное увеличение
-        for i = 1, 10 do
-            if not circle or not circle.Parent then break end
-            local progress = i / 10
-            local currentSize = 0.2 + (targetSize - 0.2) * progress
-            circle.Size = Vector3.new(currentSize, 0.05, currentSize)
-            circle.Transparency = 0.3 + (0.3 * progress)  -- От 0.3 до 0.6
-            -- Изменение цвета с сиреневого на ярко фиолетовый
-            local r = 186 + (138 - 186) * progress  -- 186 -> 138 (BlueViolet)
-            local g = 85 + (43 - 85) * progress    -- 85 -> 43
-            local b = 211 + (226 - 211) * progress -- 211 -> 226
-            circle.Color = Color3.fromRGB(r, g, b)
-            wait(growthTime / 10)
-        end
-        
-        -- Плавное исчезание
-        for i = 1, 10 do
-            if not circle or not circle.Parent then break end
-            circle.Transparency = 0.6 + (0.4 * (i / 10))  -- От 0.6 до 1.0
-            wait(fadeTime / 10)
-        end
-        
-        if circle and circle.Parent then
-            circle:Destroy()
-        end
-    end)
-end
-
-local function startJumpCircles()
-    isJumpCirclesEnabled = true
-    
-    jumpCirclesConnection = RunService.Heartbeat:Connect(function()
-        if not isJumpCirclesEnabled or not player.Character then
-            return
-        end
-        
-        local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-        local rootPart = player.Character:FindFirstChild("HumanoidRootPart")
-        
-        if humanoid and rootPart then
-            -- Проверяем, начался ли прыжок
-            if humanoid:GetState() == Enum.HumanoidStateType.Jumping then
-                -- Создаем один круг под игроком
-                createJumpCircle(rootPart.Position)
-                wait(0.5) -- Задержка между кругами
-            end
-        end
-    end)
-    
-    showNotification("Jump Circles Enabled! (Ground circles)")
-end
-
-local function stopJumpCircles()
-    isJumpCirclesEnabled = false
-    
-    -- Удаляем все круги
-    for _, circle in ipairs(jumpCircles) do
-        if circle then
-            circle:Destroy()
-        end
-    end
-    jumpCircles = {}
-    
-    if jumpCirclesConnection then
-        jumpCirclesConnection:Disconnect()
-        jumpCirclesConnection = nil
-    end
-    
-    showNotification("Jump Circles Disabled!")
-end
 
 -- Ping Display функция
 local function createPingDisplay()
@@ -2568,17 +2639,6 @@ local function setupGlobalInputHandlers()
             end
             if guiElements and guiElements.speedHackButton then
                 updateButtonTextColor(guiElements.speedHackButton, isSpeedHackEnabled)
-            end
-        end
-        
-        if input.KeyCode == Enum.KeyCode.T then
-            if isRapidFireEnabled then
-                stopRapidFire()
-            else
-                startRapidFire()
-            end
-            if guiElements and guiElements.rapidFireButton then
-                updateButtonTextColor(guiElements.rapidFireButton, isRapidFireEnabled)
             end
         end
         
@@ -3455,83 +3515,11 @@ local function createMainGUI()
     glowCorner.CornerRadius = UDim.new(0, 6)
     glowCorner.Parent = glowButton
 
-    -- Jump Circles
-    local jumpCirclesButton = Instance.new("TextButton")
-    jumpCirclesButton.Name = "JumpCirclesButton"
-    jumpCirclesButton.Size = UDim2.new(1, -20, 0, 35)
-    jumpCirclesButton.Position = UDim2.new(0, 10, 0, 125)
-    jumpCirclesButton.BackgroundColor3 = GUI_COLORS.mainBackground
-    jumpCirclesButton.BackgroundTransparency = 0.3
-    jumpCirclesButton.Text = "Jump Circles"
-    jumpCirclesButton.TextColor3 = GUI_COLORS.disabled
-    jumpCirclesButton.TextSize = 14
-    jumpCirclesButton.Font = Enum.Font.Gotham
-    jumpCirclesButton.TextXAlignment = Enum.TextXAlignment.Left
-    jumpCirclesButton.Parent = visualFrame
-
-    local jumpCirclesCorner = Instance.new("UICorner")
-    jumpCirclesCorner.CornerRadius = UDim.new(0, 6)
-    jumpCirclesCorner.Parent = jumpCirclesButton
-
-    -- HUD Settings
-    local hudButton = Instance.new("TextButton")
-    hudButton.Name = "HUDButton"
-    hudButton.Size = UDim2.new(1, -20, 0, 35)
-    hudButton.Position = UDim2.new(0, 10, 0, 165)
-    hudButton.BackgroundColor3 = GUI_COLORS.mainBackground
-    hudButton.BackgroundTransparency = 0.3
-    hudButton.Text = "HUD Settings"
-    hudButton.TextColor3 = GUI_COLORS.disabled
-    hudButton.TextSize = 14
-    hudButton.Font = Enum.Font.Gotham
-    hudButton.TextXAlignment = Enum.TextXAlignment.Left
-    hudButton.Parent = visualFrame
-
-    local hudCorner = Instance.new("UICorner")
-    hudCorner.CornerRadius = UDim.new(0, 6)
-    hudCorner.Parent = hudButton
-
-    -- Custom Sky
-    local customSkyButton = Instance.new("TextButton")
-    customSkyButton.Name = "CustomSkyButton"
-    customSkyButton.Size = UDim2.new(1, -20, 0, 35)
-    customSkyButton.Position = UDim2.new(0, 10, 0, 205)
-    customSkyButton.BackgroundColor3 = GUI_COLORS.mainBackground
-    customSkyButton.BackgroundTransparency = 0.3
-    customSkyButton.Text = "Custom Sky"
-    customSkyButton.TextColor3 = GUI_COLORS.disabled
-    customSkyButton.TextSize = 14
-    customSkyButton.Font = Enum.Font.Gotham
-    customSkyButton.TextXAlignment = Enum.TextXAlignment.Left
-    customSkyButton.Parent = visualFrame
-
-    local customSkyCorner = Instance.new("UICorner")
-    customSkyCorner.CornerRadius = UDim.new(0, 6)
-    customSkyCorner.Parent = customSkyButton
-
-    -- Custom Crosshair
-    local crosshairButton = Instance.new("TextButton")
-    crosshairButton.Name = "CrosshairButton"
-    crosshairButton.Size = UDim2.new(1, -20, 0, 35)
-    crosshairButton.Position = UDim2.new(0, 10, 0, 245)
-    crosshairButton.BackgroundColor3 = GUI_COLORS.mainBackground
-    crosshairButton.BackgroundTransparency = 0.3
-    crosshairButton.Text = "Custom Crosshair"
-    crosshairButton.TextColor3 = GUI_COLORS.disabled
-    crosshairButton.TextSize = 14
-    crosshairButton.Font = Enum.Font.Gotham
-    crosshairButton.TextXAlignment = Enum.TextXAlignment.Left
-    crosshairButton.Parent = visualFrame
-
-    local crosshairCorner = Instance.new("UICorner")
-    crosshairCorner.CornerRadius = UDim.new(0, 6)
-    crosshairCorner.Parent = crosshairButton
-
     -- X-Ray
     local xrayButton = Instance.new("TextButton")
     xrayButton.Name = "XRayButton"
     xrayButton.Size = UDim2.new(1, -20, 0, 35)
-    xrayButton.Position = UDim2.new(0, 10, 0, 285)
+    xrayButton.Position = UDim2.new(0, 10, 0, 125)
     xrayButton.BackgroundColor3 = GUI_COLORS.mainBackground
     xrayButton.BackgroundTransparency = 0.3
     xrayButton.Text = "X-Ray"
@@ -3544,6 +3532,24 @@ local function createMainGUI()
     local xrayCorner = Instance.new("UICorner")
     xrayCorner.CornerRadius = UDim.new(0, 6)
     xrayCorner.Parent = xrayButton
+
+    -- World Modulation
+    local worldModButton = Instance.new("TextButton")
+    worldModButton.Name = "WorldModButton"
+    worldModButton.Size = UDim2.new(1, -20, 0, 35)
+    worldModButton.Position = UDim2.new(0, 10, 0, 165)
+    worldModButton.BackgroundColor3 = GUI_COLORS.mainBackground
+    worldModButton.BackgroundTransparency = 0.3
+    worldModButton.Text = "World Modulation"
+    worldModButton.TextColor3 = GUI_COLORS.disabled
+    worldModButton.TextSize = 14
+    worldModButton.Font = Enum.Font.Gotham
+    worldModButton.TextXAlignment = Enum.TextXAlignment.Left
+    worldModButton.Parent = visualFrame
+
+    local worldModCorner = Instance.new("UICorner")
+    worldModCorner.CornerRadius = UDim.new(0, 6)
+    worldModCorner.Parent = worldModButton
 
     -- Столбец Movement
     local movementFrame = Instance.new("Frame")
@@ -3588,29 +3594,11 @@ local function createMainGUI()
     movementTitleGradient.Parent = movementTitleLabel
     
 
-    -- Spinbot
-    local spinbotButton = Instance.new("TextButton")
-    spinbotButton.Name = "SpinbotButton"
-    spinbotButton.Size = UDim2.new(1, -20, 0, 35)
-    spinbotButton.Position = UDim2.new(0, 10, 0, 45)
-    spinbotButton.BackgroundColor3 = GUI_COLORS.mainBackground
-    spinbotButton.BackgroundTransparency = 0.3
-    spinbotButton.Text = "Spinbot"
-    spinbotButton.TextColor3 = GUI_COLORS.disabled
-    spinbotButton.TextSize = 14
-    spinbotButton.Font = Enum.Font.Gotham
-    spinbotButton.TextXAlignment = Enum.TextXAlignment.Left
-    spinbotButton.Parent = movementFrame
-
-    local spinbotCorner = Instance.new("UICorner")
-    spinbotCorner.CornerRadius = UDim.new(0, 6)
-    spinbotCorner.Parent = spinbotButton
-
     -- Strafe
     local strafeButton = Instance.new("TextButton")
     strafeButton.Name = "StrafeButton"
     strafeButton.Size = UDim2.new(1, -20, 0, 35)
-    strafeButton.Position = UDim2.new(0, 10, 0, 85)
+    strafeButton.Position = UDim2.new(0, 10, 0, 45)
     strafeButton.BackgroundColor3 = GUI_COLORS.mainBackground
     strafeButton.BackgroundTransparency = 0.3
     strafeButton.Text = "Strafe + FastStop [X]"
@@ -3628,7 +3616,7 @@ local function createMainGUI()
     local speedHackButton = Instance.new("TextButton")
     speedHackButton.Name = "SpeedHackButton"
     speedHackButton.Size = UDim2.new(1, -20, 0, 35)
-    speedHackButton.Position = UDim2.new(0, 10, 0, 125)
+    speedHackButton.Position = UDim2.new(0, 10, 0, 85)
     speedHackButton.BackgroundColor3 = GUI_COLORS.mainBackground
     speedHackButton.BackgroundTransparency = 0.3
     speedHackButton.Text = "SpeedHack [H]"
@@ -3646,7 +3634,7 @@ local function createMainGUI()
     local bunnyHopButton = Instance.new("TextButton")
     bunnyHopButton.Name = "BunnyHopButton"
     bunnyHopButton.Size = UDim2.new(1, -20, 0, 35)
-    bunnyHopButton.Position = UDim2.new(0, 10, 0, 165)
+    bunnyHopButton.Position = UDim2.new(0, 10, 0, 125)
     bunnyHopButton.BackgroundColor3 = GUI_COLORS.mainBackground
     bunnyHopButton.BackgroundTransparency = 0.3
     bunnyHopButton.Text = "BunnyHop"
@@ -3661,13 +3649,12 @@ local function createMainGUI()
     bunnyHopCorner.Parent = bunnyHopButton
 
     -- Создаем настройки для функций
-    local aimbotSettingsFrame = createFunctionSettings(combatFrame, "AimbotButton", 85, 120)
+    local aimbotSettingsFrame = createFunctionSettings(combatFrame, "AimbotButton", 85, 190)
     local chamsSettingsFrame = createFunctionSettings(visualFrame, "ChamsButton", 85, 180)
     local glowSettingsFrame = createFunctionSettings(visualFrame, "GlowButton", 125, 120)
-    local hudSettingsFrame = createFunctionSettings(visualFrame, "HUDButton", 165, 150)
-    local triggerSettingsFrame = createFunctionSettings(combatFrame, "TriggerButton", 165, 120)
-    local crosshairSettingsFrame = createFunctionSettings(visualFrame, "CrosshairButton", 245, 180)
-    local modelChangerSettingsFrame = createFunctionSettings(combatFrame, "ModelChangerButton", 165, 120)
+    local triggerSettingsFrame = createFunctionSettings(combatFrame, "TriggerButton", 125, 120)
+    local modelChangerSettingsFrame = createFunctionSettings(combatFrame, "ModelChangerButton", 205, 120)
+    local worldModSettingsFrame = createFunctionSettings(visualFrame, "WorldModButton", 205, 135)
     
     -- Настройки для Aimbot
     local tracersFrame = Instance.new("Frame")
@@ -3734,6 +3721,68 @@ local function createMainGUI()
     aimbotInfoLabel.TextXAlignment = Enum.TextXAlignment.Left
     aimbotInfoLabel.TextYAlignment = Enum.TextYAlignment.Top
     aimbotInfoLabel.Parent = aimbotSettingsFrame
+    
+    -- Режим аимбота
+    local aimbotModeFrame = Instance.new("Frame")
+    aimbotModeFrame.Size = UDim2.new(1, -20, 0, 25)
+    aimbotModeFrame.Position = UDim2.new(0, 10, 0, 125)
+    aimbotModeFrame.BackgroundTransparency = 1
+    aimbotModeFrame.Parent = aimbotSettingsFrame
+
+    local aimbotModeLabel = Instance.new("TextLabel")
+    aimbotModeLabel.Size = UDim2.new(0.5, 0, 1, 0)
+    aimbotModeLabel.Position = UDim2.new(0, 0, 0, 0)
+    aimbotModeLabel.BackgroundTransparency = 1
+    aimbotModeLabel.Text = "Mode: " .. aimbotSettings.mode
+    aimbotModeLabel.TextColor3 = TEXT_COLOR
+    aimbotModeLabel.TextSize = 12
+    aimbotModeLabel.Font = Enum.Font.Gotham
+    aimbotModeLabel.TextXAlignment = Enum.TextXAlignment.Left
+    aimbotModeLabel.Parent = aimbotModeFrame
+
+    local aimbotModeButton = Instance.new("TextButton")
+    aimbotModeButton.Size = UDim2.new(0, 70, 0, 20)
+    aimbotModeButton.Position = UDim2.new(0.5, 0, 0, 2)
+    aimbotModeButton.BackgroundColor3 = GUI_COLORS.title
+    aimbotModeButton.BorderSizePixel = 0
+    aimbotModeButton.Text = "Change"
+    aimbotModeButton.TextColor3 = TEXT_COLOR
+    aimbotModeButton.TextSize = 11
+    aimbotModeButton.Font = Enum.Font.GothamBold
+    aimbotModeButton.Parent = aimbotModeFrame
+
+    local aimbotModeCorner = Instance.new("UICorner")
+    aimbotModeCorner.CornerRadius = UDim.new(0, 4)
+    aimbotModeCorner.Parent = aimbotModeButton
+    
+    -- TargetGui toggle
+    local targetGuiFrame = Instance.new("Frame")
+    targetGuiFrame.Size = UDim2.new(1, -20, 0, 25)
+    targetGuiFrame.Position = UDim2.new(0, 10, 0, 155)
+    targetGuiFrame.BackgroundTransparency = 1
+    targetGuiFrame.Parent = aimbotSettingsFrame
+
+    local targetGuiLabel = Instance.new("TextLabel")
+    targetGuiLabel.Size = UDim2.new(0.7, 0, 1, 0)
+    targetGuiLabel.Position = UDim2.new(0, 0, 0, 0)
+    targetGuiLabel.BackgroundTransparency = 1
+    targetGuiLabel.Text = "Target GUI"
+    targetGuiLabel.TextColor3 = TEXT_COLOR
+    targetGuiLabel.TextSize = 12
+    targetGuiLabel.Font = Enum.Font.Gotham
+    targetGuiLabel.TextXAlignment = Enum.TextXAlignment.Left
+    targetGuiLabel.Parent = targetGuiFrame
+
+    local targetGuiToggle = Instance.new("TextButton")
+    targetGuiToggle.Size = UDim2.new(0, 20, 0, 20)
+    targetGuiToggle.Position = UDim2.new(0.7, 0, 0, 2)
+    targetGuiToggle.BackgroundColor3 = aimbotSettings.showTargetGui and GUI_COLORS.enabled or GUI_COLORS.disabled
+    targetGuiToggle.Text = ""
+    targetGuiToggle.Parent = targetGuiFrame
+
+    local targetGuiToggleCorner = Instance.new("UICorner")
+    targetGuiToggleCorner.CornerRadius = UDim.new(0, 4)
+    targetGuiToggleCorner.Parent = targetGuiToggle
 
     -- Настройки для Chams
     local fillColorLabel = Instance.new("TextLabel")
@@ -3930,88 +3979,6 @@ local function createMainGUI()
     glowRangePlusCorner.CornerRadius = UDim.new(0, 4)
     glowRangePlusCorner.Parent = glowRangePlusButton
 
-    -- Настройки для HUD (Модули)
-    local modulesLabel = Instance.new("TextLabel")
-    modulesLabel.Size = UDim2.new(1, -20, 0, 25)
-    modulesLabel.Position = UDim2.new(0, 10, 0, 10)
-    modulesLabel.BackgroundTransparency = 1
-    modulesLabel.Text = "MODULES"
-    modulesLabel.TextColor3 = TEXT_COLOR
-    modulesLabel.TextSize = 14
-    modulesLabel.Font = Enum.Font.GothamBold
-    modulesLabel.TextXAlignment = Enum.TextXAlignment.Left
-    modulesLabel.Parent = hudSettingsFrame
-
-    -- Ping Display toggle
-    local pingFrame = Instance.new("Frame")
-    pingFrame.Size = UDim2.new(1, -20, 0, 25)
-    pingFrame.Position = UDim2.new(0, 10, 0, 40)
-    pingFrame.BackgroundTransparency = 1
-    pingFrame.Parent = hudSettingsFrame
-
-    local pingLabel = Instance.new("TextLabel")
-    pingLabel.Size = UDim2.new(0.7, 0, 1, 0)
-    pingLabel.Position = UDim2.new(0, 0, 0, 0)
-    pingLabel.BackgroundTransparency = 1
-    pingLabel.Text = "Ping Display"
-    pingLabel.TextColor3 = TEXT_COLOR
-    pingLabel.TextSize = 12
-    pingLabel.Font = Enum.Font.Gotham
-    pingLabel.TextXAlignment = Enum.TextXAlignment.Left
-    pingLabel.Parent = pingFrame
-
-    local pingToggle = Instance.new("TextButton")
-    pingToggle.Size = UDim2.new(0, 20, 0, 20)
-    pingToggle.Position = UDim2.new(0.7, 0, 0, 2)
-    pingToggle.BackgroundColor3 = isPingDisplayEnabled and GUI_COLORS.enabled or GUI_COLORS.disabled
-    pingToggle.Text = ""
-    pingToggle.Parent = pingFrame
-
-    local pingToggleCorner = Instance.new("UICorner")
-    pingToggleCorner.CornerRadius = UDim.new(0, 4)
-    pingToggleCorner.Parent = pingToggle
-
-    -- FPS Display toggle
-    local fpsFrame = Instance.new("Frame")
-    fpsFrame.Size = UDim2.new(1, -20, 0, 25)
-    fpsFrame.Position = UDim2.new(0, 10, 0, 70)
-    fpsFrame.BackgroundTransparency = 1
-    fpsFrame.Parent = hudSettingsFrame
-
-    local fpsLabel = Instance.new("TextLabel")
-    fpsLabel.Size = UDim2.new(0.7, 0, 1, 0)
-    fpsLabel.Position = UDim2.new(0, 0, 0, 0)
-    fpsLabel.BackgroundTransparency = 1
-    fpsLabel.Text = "FPS Display"
-    fpsLabel.TextColor3 = TEXT_COLOR
-    fpsLabel.TextSize = 12
-    fpsLabel.Font = Enum.Font.Gotham
-    fpsLabel.TextXAlignment = Enum.TextXAlignment.Left
-    fpsLabel.Parent = fpsFrame
-
-    local fpsToggle = Instance.new("TextButton")
-    fpsToggle.Size = UDim2.new(0, 20, 0, 20)
-    fpsToggle.Position = UDim2.new(0.7, 0, 0, 2)
-    fpsToggle.BackgroundColor3 = isFPSDisplayEnabled and GUI_COLORS.enabled or GUI_COLORS.disabled
-    fpsToggle.Text = ""
-    fpsToggle.Parent = fpsFrame
-
-    local fpsToggleCorner = Instance.new("UICorner")
-    fpsToggleCorner.CornerRadius = UDim.new(0, 4)
-    fpsToggleCorner.Parent = fpsToggle
-
-    local hudInfoLabel = Instance.new("TextLabel")
-    hudInfoLabel.Size = UDim2.new(1, -20, 0, 50)
-    hudInfoLabel.Position = UDim2.new(0, 10, 0, 100)
-    hudInfoLabel.BackgroundTransparency = 1
-    hudInfoLabel.Text = "Modules can be dragged around the screen\nRight Shift - Hide/Show GUI"
-    hudInfoLabel.TextColor3 = TEXT_COLOR
-    hudInfoLabel.TextSize = 10
-    hudInfoLabel.Font = Enum.Font.Gotham
-    hudInfoLabel.TextXAlignment = Enum.TextXAlignment.Left
-    hudInfoLabel.TextYAlignment = Enum.TextYAlignment.Top
-    hudInfoLabel.Parent = hudSettingsFrame
-
     -- Настройки для TriggerBot
     local triggerDelayLabel = Instance.new("TextLabel")
     triggerDelayLabel.Size = UDim2.new(1, -20, 0, 25)
@@ -4046,65 +4013,6 @@ local function createMainGUI()
     triggerInfoLabel.TextXAlignment = Enum.TextXAlignment.Left
     triggerInfoLabel.TextYAlignment = Enum.TextYAlignment.Top
     triggerInfoLabel.Parent = triggerSettingsFrame
-
-    -- Настройки для Custom Crosshair
-    local crosshairTypeLabel = Instance.new("TextLabel")
-    crosshairTypeLabel.Size = UDim2.new(1, -20, 0, 25)
-    crosshairTypeLabel.Position = UDim2.new(0, 10, 0, 10)
-    crosshairTypeLabel.BackgroundTransparency = 1
-    crosshairTypeLabel.Text = "Type: " .. crosshairSettings.type
-    crosshairTypeLabel.TextColor3 = TEXT_COLOR
-    crosshairTypeLabel.TextSize = 12
-    crosshairTypeLabel.Font = Enum.Font.Gotham
-    crosshairTypeLabel.TextXAlignment = Enum.TextXAlignment.Left
-    crosshairTypeLabel.Parent = crosshairSettingsFrame
-
-    local crosshairColorLabel = Instance.new("TextLabel")
-    crosshairColorLabel.Size = UDim2.new(1, -20, 0, 25)
-    crosshairColorLabel.Position = UDim2.new(0, 10, 0, 40)
-    crosshairColorLabel.BackgroundTransparency = 1
-    crosshairColorLabel.Text = "Color"
-    crosshairColorLabel.TextColor3 = TEXT_COLOR
-    crosshairColorLabel.TextSize = 12
-    crosshairColorLabel.Font = Enum.Font.Gotham
-    crosshairColorLabel.TextXAlignment = Enum.TextXAlignment.Left
-    crosshairColorLabel.Parent = crosshairSettingsFrame
-
-    local crosshairColorPreview = Instance.new("TextButton")
-    crosshairColorPreview.Size = UDim2.new(0, 60, 0, 20)
-    crosshairColorPreview.Position = UDim2.new(0, 10, 0, 65)
-    crosshairColorPreview.BackgroundColor3 = crosshairSettings.color
-    crosshairColorPreview.BorderSizePixel = 1
-    crosshairColorPreview.BorderColor3 = Color3.fromRGB(255, 255, 255)
-    crosshairColorPreview.Text = ""
-    crosshairColorPreview.Parent = crosshairSettingsFrame
-
-    local crosshairColorPreviewCorner = Instance.new("UICorner")
-    crosshairColorPreviewCorner.CornerRadius = UDim.new(0, 4)
-    crosshairColorPreviewCorner.Parent = crosshairColorPreview
-
-    local crosshairSizeLabel = Instance.new("TextLabel")
-    crosshairSizeLabel.Size = UDim2.new(1, -20, 0, 25)
-    crosshairSizeLabel.Position = UDim2.new(0, 10, 0, 90)
-    crosshairSizeLabel.BackgroundTransparency = 1
-    crosshairSizeLabel.Text = "Size: " .. crosshairSettings.size
-    crosshairSizeLabel.TextColor3 = TEXT_COLOR
-    crosshairSizeLabel.TextSize = 12
-    crosshairSizeLabel.Font = Enum.Font.Gotham
-    crosshairSizeLabel.TextXAlignment = Enum.TextXAlignment.Left
-    crosshairSizeLabel.Parent = crosshairSettingsFrame
-
-    local crosshairInfoLabel = Instance.new("TextLabel")
-    crosshairInfoLabel.Size = UDim2.new(1, -20, 0, 50)
-    crosshairInfoLabel.Position = UDim2.new(0, 10, 0, 120)
-    crosshairInfoLabel.BackgroundTransparency = 1
-    crosshairInfoLabel.Text = "Customizable crosshair with different types\nand colors"
-    crosshairInfoLabel.TextColor3 = TEXT_COLOR
-    crosshairInfoLabel.TextSize = 10
-    crosshairInfoLabel.Font = Enum.Font.Gotham
-    crosshairInfoLabel.TextXAlignment = Enum.TextXAlignment.Left
-    crosshairInfoLabel.TextYAlignment = Enum.TextYAlignment.Top
-    crosshairInfoLabel.Parent = crosshairSettingsFrame
 
     -- Настройки для ModelChanger
     local modelChangerMaterialLabel = Instance.new("TextLabel")
@@ -4170,6 +4078,139 @@ local function createMainGUI()
     modelChangerInfoLabel.TextYAlignment = Enum.TextYAlignment.Top
     modelChangerInfoLabel.Parent = modelChangerSettingsFrame
 
+    -- Настройки для WorldModulation
+    -- Time of Day toggle
+    local timeOfDayFrame = Instance.new("Frame")
+    timeOfDayFrame.Size = UDim2.new(1, -20, 0, 25)
+    timeOfDayFrame.Position = UDim2.new(0, 10, 0, 10)
+    timeOfDayFrame.BackgroundTransparency = 1
+    timeOfDayFrame.Parent = worldModSettingsFrame
+
+    local timeOfDayLabel = Instance.new("TextLabel")
+    timeOfDayLabel.Size = UDim2.new(0.5, 0, 1, 0)
+    timeOfDayLabel.Position = UDim2.new(0, 0, 0, 0)
+    timeOfDayLabel.BackgroundTransparency = 1
+    timeOfDayLabel.Text = "Time: " .. worldModulationSettings.timeOfDay
+    timeOfDayLabel.TextColor3 = TEXT_COLOR
+    timeOfDayLabel.TextSize = 12
+    timeOfDayLabel.Font = Enum.Font.Gotham
+    timeOfDayLabel.TextXAlignment = Enum.TextXAlignment.Left
+    timeOfDayLabel.Parent = timeOfDayFrame
+
+    local timeOfDayButton = Instance.new("TextButton")
+    timeOfDayButton.Size = UDim2.new(0, 70, 0, 20)
+    timeOfDayButton.Position = UDim2.new(0.5, 0, 0, 2)
+    timeOfDayButton.BackgroundColor3 = GUI_COLORS.title
+    timeOfDayButton.BorderSizePixel = 0
+    timeOfDayButton.Text = "Toggle"
+    timeOfDayButton.TextColor3 = TEXT_COLOR
+    timeOfDayButton.TextSize = 11
+    timeOfDayButton.Font = Enum.Font.GothamBold
+    timeOfDayButton.Parent = timeOfDayFrame
+
+    local timeOfDayCorner = Instance.new("UICorner")
+    timeOfDayCorner.CornerRadius = UDim.new(0, 4)
+    timeOfDayCorner.Parent = timeOfDayButton
+
+    -- Fog toggle
+    local fogFrame = Instance.new("Frame")
+    fogFrame.Size = UDim2.new(1, -20, 0, 25)
+    fogFrame.Position = UDim2.new(0, 10, 0, 40)
+    fogFrame.BackgroundTransparency = 1
+    fogFrame.Parent = worldModSettingsFrame
+
+    local fogLabel = Instance.new("TextLabel")
+    fogLabel.Size = UDim2.new(0.7, 0, 1, 0)
+    fogLabel.Position = UDim2.new(0, 0, 0, 0)
+    fogLabel.BackgroundTransparency = 1
+    fogLabel.Text = "Fog"
+    fogLabel.TextColor3 = TEXT_COLOR
+    fogLabel.TextSize = 12
+    fogLabel.Font = Enum.Font.Gotham
+    fogLabel.TextXAlignment = Enum.TextXAlignment.Left
+    fogLabel.Parent = fogFrame
+
+    local fogToggle = Instance.new("TextButton")
+    fogToggle.Size = UDim2.new(0, 20, 0, 20)
+    fogToggle.Position = UDim2.new(0.7, 0, 0, 2)
+    fogToggle.BackgroundColor3 = worldModulationSettings.fog and GUI_COLORS.enabled or GUI_COLORS.disabled
+    fogToggle.Text = ""
+    fogToggle.Parent = fogFrame
+
+    local fogToggleCorner = Instance.new("UICorner")
+    fogToggleCorner.CornerRadius = UDim.new(0, 4)
+    fogToggleCorner.Parent = fogToggle
+
+    -- Shadows toggle
+    local shadowsFrame = Instance.new("Frame")
+    shadowsFrame.Size = UDim2.new(1, -20, 0, 25)
+    shadowsFrame.Position = UDim2.new(0, 10, 0, 70)
+    shadowsFrame.BackgroundTransparency = 1
+    shadowsFrame.Parent = worldModSettingsFrame
+
+    local shadowsLabel = Instance.new("TextLabel")
+    shadowsLabel.Size = UDim2.new(0.7, 0, 1, 0)
+    shadowsLabel.Position = UDim2.new(0, 0, 0, 0)
+    shadowsLabel.BackgroundTransparency = 1
+    shadowsLabel.Text = "Shadows"
+    shadowsLabel.TextColor3 = TEXT_COLOR
+    shadowsLabel.TextSize = 12
+    shadowsLabel.Font = Enum.Font.Gotham
+    shadowsLabel.TextXAlignment = Enum.TextXAlignment.Left
+    shadowsLabel.Parent = shadowsFrame
+
+    local shadowsToggle = Instance.new("TextButton")
+    shadowsToggle.Size = UDim2.new(0, 20, 0, 20)
+    shadowsToggle.Position = UDim2.new(0.7, 0, 0, 2)
+    shadowsToggle.BackgroundColor3 = worldModulationSettings.shadows and GUI_COLORS.enabled or GUI_COLORS.disabled
+    shadowsToggle.Text = ""
+    shadowsToggle.Parent = shadowsFrame
+
+    local shadowsToggleCorner = Instance.new("UICorner")
+    shadowsToggleCorner.CornerRadius = UDim.new(0, 4)
+    shadowsToggleCorner.Parent = shadowsToggle
+
+    -- Custom Sky toggle
+    local customSkyToggleFrame = Instance.new("Frame")
+    customSkyToggleFrame.Size = UDim2.new(1, -20, 0, 25)
+    customSkyToggleFrame.Position = UDim2.new(0, 10, 0, 100)
+    customSkyToggleFrame.BackgroundTransparency = 1
+    customSkyToggleFrame.Parent = worldModSettingsFrame
+
+    local customSkyToggleLabel = Instance.new("TextLabel")
+    customSkyToggleLabel.Size = UDim2.new(0.7, 0, 1, 0)
+    customSkyToggleLabel.Position = UDim2.new(0, 0, 0, 0)
+    customSkyToggleLabel.BackgroundTransparency = 1
+    customSkyToggleLabel.Text = "Custom Sky"
+    customSkyToggleLabel.TextColor3 = TEXT_COLOR
+    customSkyToggleLabel.TextSize = 12
+    customSkyToggleLabel.Font = Enum.Font.Gotham
+    customSkyToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    customSkyToggleLabel.Parent = customSkyToggleFrame
+
+    local customSkyToggle = Instance.new("TextButton")
+    customSkyToggle.Size = UDim2.new(0, 20, 0, 20)
+    customSkyToggle.Position = UDim2.new(0.7, 0, 0, 2)
+    customSkyToggle.BackgroundColor3 = worldModulationSettings.customSky and GUI_COLORS.enabled or GUI_COLORS.disabled
+    customSkyToggle.Text = ""
+    customSkyToggle.Parent = customSkyToggleFrame
+
+    local customSkyToggleCorner = Instance.new("UICorner")
+    customSkyToggleCorner.CornerRadius = UDim.new(0, 4)
+    customSkyToggleCorner.Parent = customSkyToggle
+
+    local worldModInfoLabel = Instance.new("TextLabel")
+    worldModInfoLabel.Size = UDim2.new(1, -20, 0, 30)
+    worldModInfoLabel.Position = UDim2.new(0, 10, 0, 130)
+    worldModInfoLabel.BackgroundTransparency = 1
+    worldModInfoLabel.Text = "Control world lighting, fog, shadows and sky"
+    worldModInfoLabel.TextColor3 = TEXT_COLOR
+    worldModInfoLabel.TextSize = 10
+    worldModInfoLabel.Font = Enum.Font.Gotham
+    worldModInfoLabel.TextXAlignment = Enum.TextXAlignment.Left
+    worldModInfoLabel.TextYAlignment = Enum.TextYAlignment.Top
+    worldModInfoLabel.Parent = worldModSettingsFrame
+
     guiElements = {
         mainFrame = combatFrame,
         visualFrame = visualFrame,
@@ -4181,12 +4222,7 @@ local function createMainGUI()
         modelChangerButton = modelChangerButton,
         chamsButton = chamsButton,
         glowButton = glowButton,
-        jumpCirclesButton = jumpCirclesButton,
-        hudButton = hudButton,
-        customSkyButton = customSkyButton,
-        crosshairButton = crosshairButton,
         xrayButton = xrayButton,
-        spinbotButton = spinbotButton,
         strafeButton = strafeButton,
         speedHackButton = speedHackButton,
         bunnyHopButton = bunnyHopButton,
@@ -4200,20 +4236,25 @@ local function createMainGUI()
         glowRangePlusButton = glowRangePlusButton,
         tracersToggle = tracersToggle,
         tracerColorPreview = tracerColorPreview,
-        pingToggle = pingToggle,
-        fpsToggle = fpsToggle,
-        crosshairColorPreview = crosshairColorPreview,
         modelChangerColorPreview = modelChangerColorPreview,
         materialToggleButton = materialToggleButton,
-        modelChangerMaterialLabel = modelChangerMaterialLabel
+        modelChangerMaterialLabel = modelChangerMaterialLabel,
+        aimbotModeButton = aimbotModeButton,
+        aimbotModeLabel = aimbotModeLabel,
+        targetGuiToggle = targetGuiToggle,
+        worldModButton = worldModButton,
+        timeOfDayButton = timeOfDayButton,
+        timeOfDayLabel = timeOfDayLabel,
+        fogToggle = fogToggle,
+        shadowsToggle = shadowsToggle,
+        customSkyToggle = customSkyToggle
     }
     
     -- Добавляем анимации при наведении на все кнопки
     local allButtons = {
         aimbotButton, fovButton, triggerButton, modelChangerButton,
-        chamsButton, glowButton, jumpCirclesButton, hudButton,
-        customSkyButton, crosshairButton, xrayButton,
-        spinbotButton, strafeButton, speedHackButton, bunnyHopButton
+        chamsButton, glowButton, xrayButton, worldModButton,
+        strafeButton, speedHackButton, bunnyHopButton
     }
     
     for _, button in ipairs(allButtons) do
@@ -4308,36 +4349,6 @@ local function setupButtonHandlers()
         togglePlayerGlows()
     end)
     
-    guiElements.jumpCirclesButton.MouseButton1Click:Connect(function()
-        animateButtonClick(guiElements.jumpCirclesButton)
-        if isJumpCirclesEnabled then
-            stopJumpCircles()
-        else
-            startJumpCircles()
-        end
-        updateButtonTextColor(guiElements.jumpCirclesButton, isJumpCirclesEnabled)
-    end)
-    
-    guiElements.hudButton.MouseButton1Click:Connect(function()
-        animateButtonClick(guiElements.hudButton)
-    end)
-    
-    guiElements.customSkyButton.MouseButton1Click:Connect(function()
-        animateButtonClick(guiElements.customSkyButton)
-        if isCustomSkyEnabled then
-            disableCustomSky()
-        else
-            enableCustomSky()
-        end
-    end)
-    
-    guiElements.crosshairButton.MouseButton1Click:Connect(function()
-        animateButtonClick(guiElements.crosshairButton)
-        crosshairSettings.enabled = not crosshairSettings.enabled
-        updateButtonTextColor(guiElements.crosshairButton, crosshairSettings.enabled)
-        updateCustomCrosshair()
-    end)
-    
     guiElements.xrayButton.MouseButton1Click:Connect(function()
         animateButtonClick(guiElements.xrayButton)
         if isXRayEnabled then
@@ -4347,17 +4358,14 @@ local function setupButtonHandlers()
         end
     end)
     
-    -- Обработчики для кнопок MOVEMENT
-    guiElements.spinbotButton.MouseButton1Click:Connect(function()
-        animateButtonClick(guiElements.spinbotButton)
-        if isSpinbotEnabled then
-            stopSpinbot()
-        else
-            startSpinbot()
-        end
-        updateButtonTextColor(guiElements.spinbotButton, isSpinbotEnabled)
+    guiElements.worldModButton.MouseButton1Click:Connect(function()
+        animateButtonClick(guiElements.worldModButton)
+        -- Просто применяем настройки
+        applyWorldModulation()
+        showNotification("World Modulation Applied!")
     end)
     
+    -- Обработчики для кнопок MOVEMENT
     guiElements.strafeButton.MouseButton1Click:Connect(function()
         animateButtonClick(guiElements.strafeButton)
         if isStrafeEnabled then
@@ -4408,6 +4416,36 @@ local function setupButtonHandlers()
             guiElements.tracerColorPreview.BackgroundColor3 = newColor
             showNotification("Tracer color updated!")
         end)
+    end)
+    
+    -- Обработчик для изменения режима аимбота
+    guiElements.aimbotModeButton.MouseButton1Click:Connect(function()
+        if aimbotSettings.mode == "Normal" then
+            aimbotSettings.mode = "Silent"
+        else
+            aimbotSettings.mode = "Normal"
+        end
+        guiElements.aimbotModeLabel.Text = "Mode: " .. aimbotSettings.mode
+        showNotification("Aimbot Mode: " .. aimbotSettings.mode)
+    end)
+    
+    -- Обработчик для TargetGui toggle
+    guiElements.targetGuiToggle.MouseButton1Click:Connect(function()
+        aimbotSettings.showTargetGui = not aimbotSettings.showTargetGui
+        guiElements.targetGuiToggle.BackgroundColor3 = aimbotSettings.showTargetGui and GUI_COLORS.enabled or GUI_COLORS.disabled
+        showNotification("Target GUI " .. (aimbotSettings.showTargetGui and "Enabled!" or "Disabled!"))
+        
+        if aimbotSettings.showTargetGui then
+            -- Создаём TargetGui с "Nobody Locked"
+            createTargetGui()
+        else
+            -- Удаляем TargetGui
+            if targetGui then
+                targetGui:Destroy()
+                targetGui = nil
+                currentTarget = nil
+            end
+        end
     end)
     
     -- Обработчики для настроек Chams
@@ -4461,52 +4499,9 @@ local function setupButtonHandlers()
         end)
     end)
     
-    -- Обработчики для настроек HUD (Модули)
-    guiElements.hudButton.MouseButton2Click:Connect(function()
-        toggleFunctionSettings("HUDButton", guiElements.visualFrame)
-    end)
-    
-    guiElements.pingToggle.MouseButton1Click:Connect(function()
-        isPingDisplayEnabled = not isPingDisplayEnabled
-        guiElements.pingToggle.BackgroundColor3 = isPingDisplayEnabled and GUI_COLORS.enabled or GUI_COLORS.disabled
-        if isPingDisplayEnabled then
-            createPingDisplay()
-        elseif pingDisplay then
-            pingDisplay:Destroy()
-            pingDisplay = nil
-        end
-        showNotification("Ping Display " .. (isPingDisplayEnabled and "Enabled!" or "Disabled!"))
-    end)
-    
-    guiElements.fpsToggle.MouseButton1Click:Connect(function()
-        isFPSDisplayEnabled = not isFPSDisplayEnabled
-        guiElements.fpsToggle.BackgroundColor3 = isFPSDisplayEnabled and GUI_COLORS.enabled or GUI_COLORS.disabled
-        if isFPSDisplayEnabled then
-            createFPSDisplay()
-        elseif fpsDisplay then
-            fpsDisplay:Destroy()
-            fpsDisplay = nil
-        end
-        showNotification("FPS Display " .. (isFPSDisplayEnabled and "Enabled!" or "Disabled!"))
-    end)
-    
     -- Обработчики для настроек TriggerBot
     guiElements.triggerButton.MouseButton2Click:Connect(function()
         toggleFunctionSettings("TriggerButton", guiElements.mainFrame)
-    end)
-    
-    -- Обработчики для настроек Custom Crosshair
-    guiElements.crosshairButton.MouseButton2Click:Connect(function()
-        toggleFunctionSettings("CrosshairButton", guiElements.visualFrame)
-    end)
-    
-    guiElements.crosshairColorPreview.MouseButton1Click:Connect(function()
-        createColorPicker(guiElements.crosshairColorPreview, crosshairSettings.color, function(newColor)
-            crosshairSettings.color = newColor
-            guiElements.crosshairColorPreview.BackgroundColor3 = newColor
-            updateCustomCrosshair()
-            showNotification("Crosshair color updated!")
-        end)
     end)
     
     -- Обработчики для настроек ModelChanger
@@ -4556,6 +4551,47 @@ local function setupButtonHandlers()
             showNotification("Model Changer color updated!")
         end)
     end)
+    
+    -- Обработчики для WorldModulation
+    guiElements.worldModButton.MouseButton2Click:Connect(function()
+        toggleFunctionSettings("WorldModButton", guiElements.visualFrame)
+    end)
+    
+    -- Time of Day toggle
+    guiElements.timeOfDayButton.MouseButton1Click:Connect(function()
+        if worldModulationSettings.timeOfDay == "Day" then
+            worldModulationSettings.timeOfDay = "Night"
+        else
+            worldModulationSettings.timeOfDay = "Day"
+        end
+        guiElements.timeOfDayLabel.Text = "Time: " .. worldModulationSettings.timeOfDay
+        applyWorldModulation()
+        showNotification("Time of Day: " .. worldModulationSettings.timeOfDay)
+    end)
+    
+    -- Fog toggle
+    guiElements.fogToggle.MouseButton1Click:Connect(function()
+        worldModulationSettings.fog = not worldModulationSettings.fog
+        guiElements.fogToggle.BackgroundColor3 = worldModulationSettings.fog and GUI_COLORS.enabled or GUI_COLORS.disabled
+        applyWorldModulation()
+        showNotification("Fog " .. (worldModulationSettings.fog and "Enabled!" or "Disabled!"))
+    end)
+    
+    -- Shadows toggle
+    guiElements.shadowsToggle.MouseButton1Click:Connect(function()
+        worldModulationSettings.shadows = not worldModulationSettings.shadows
+        guiElements.shadowsToggle.BackgroundColor3 = worldModulationSettings.shadows and GUI_COLORS.enabled or GUI_COLORS.disabled
+        applyWorldModulation()
+        showNotification("Shadows " .. (worldModulationSettings.shadows and "Enabled!" or "Disabled!"))
+    end)
+    
+    -- Custom Sky toggle
+    guiElements.customSkyToggle.MouseButton1Click:Connect(function()
+        worldModulationSettings.customSky = not worldModulationSettings.customSky
+        guiElements.customSkyToggle.BackgroundColor3 = worldModulationSettings.customSky and GUI_COLORS.enabled or GUI_COLORS.disabled
+        applyWorldModulation()
+        showNotification("Custom Sky " .. (worldModulationSettings.customSky and "Enabled!" or "Disabled!"))
+    end)
 end
 
 -- Основная логика инициализации
@@ -4601,7 +4637,6 @@ local function initialize()
         
         guiElements = createMainGUI()
         
-        applyNightSettings()
         createFOVCircle()
         saveOriginalFOV()
         
@@ -4612,13 +4647,6 @@ local function initialize()
         pcall(function()
             DiscordRichPresence.UpdateStatus("Using VinScript Premium Features")
         end)
-        
-        print("✅ VinScript успешно загружен!")
-        print("🛡️ Anti-Cheat Bypass активирован!")
-        print("📱 Discord Rich Presence активирован!")
-        print("✨ Новый дизайн с вращающимися элементами!")
-        print("🎨 Добавлены новые функции: Custom Sky, Crosshair, X-Ray, ModelChanger!")
-        print("🔄 Обновления: Jump Circles, Bullet Tracers, Улучшенный GUI")
     end)
 end
 
