@@ -475,6 +475,170 @@ local originalSkybox = nil
 -- Глобальные переменные для элементов GUI
 local guiElements = nil
 local settingsFrames = {}
+local mobileControlsGui = nil
+
+-- Создание мобильных кнопок управления (доступны всегда)
+local function createMobileControls()
+    
+    -- Удаляем старое меню если есть
+    if mobileControlsGui then
+        mobileControlsGui:Destroy()
+    end
+    
+    mobileControlsGui = Instance.new("ScreenGui")
+    mobileControlsGui.Name = "MobileControls"
+    mobileControlsGui.ResetOnSpawn = false
+    mobileControlsGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    mobileControlsGui.Parent = game:GetService("CoreGui")
+    
+    -- Контейнер для кнопок
+    local container = Instance.new("Frame")
+    container.Name = "ButtonContainer"
+    container.Size = UDim2.new(0, 180, 0, 200)
+    container.Position = UDim2.new(1, -190, 0.5, -100)
+    container.BackgroundColor3 = GUI_COLORS.mainBackground
+    container.BackgroundTransparency = 0.3
+    container.BorderSizePixel = 0
+    container.Parent = mobileControlsGui
+    
+    local containerCorner = Instance.new("UICorner")
+    containerCorner.CornerRadius = UDim.new(0, 12)
+    containerCorner.Parent = container
+    
+    local containerStroke = Instance.new("UIStroke")
+    containerStroke.Color = GUI_COLORS.accent
+    containerStroke.Thickness = 2
+    containerStroke.Transparency = 0.5
+    containerStroke.Parent = container
+    
+    -- Заголовок
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 30)
+    title.Position = UDim2.new(0, 0, 0, 5)
+    title.BackgroundTransparency = 1
+    title.Text = "⚡ Quick Controls"
+    title.TextColor3 = GUI_COLORS.title
+    title.TextSize = 14
+    title.Font = Enum.Font.GothamBold
+    title.Parent = container
+    
+    -- Функция создания кнопки
+    local function createMobileButton(text, yPos, callback)
+        local button = Instance.new("TextButton")
+        button.Size = UDim2.new(1, -20, 0, 45)
+        button.Position = UDim2.new(0, 10, 0, yPos)
+        button.BackgroundColor3 = GUI_COLORS.columnBackground
+        button.BackgroundTransparency = 0.2
+        button.Text = text
+        button.TextColor3 = GUI_COLORS.text
+        button.TextSize = 13
+        button.Font = Enum.Font.GothamBold
+        button.BorderSizePixel = 0
+        button.Parent = container
+        
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 8)
+        btnCorner.Parent = button
+        
+        local btnStroke = Instance.new("UIStroke")
+        btnStroke.Color = GUI_COLORS.accent
+        btnStroke.Thickness = 1.5
+        btnStroke.Transparency = 0.7
+        btnStroke.Parent = button
+        
+        button.MouseButton1Click:Connect(function()
+            animateButtonClick(button)
+            callback(button)
+        end)
+        
+        return button
+    end
+    
+    -- Кнопка 1: Toggle GUI
+    local guiButton = createMobileButton("🖥️ Toggle GUI", 40, function(btn)
+        isGUIVisible = not isGUIVisible
+        if guiElements and guiElements.mainPanel then
+            guiElements.mainPanel.Visible = isGUIVisible
+            showNotification("GUI " .. (isGUIVisible and "Enabled!" or "Disabled!"))
+        end
+        btn.BackgroundColor3 = isGUIVisible and GUI_COLORS.enabled or GUI_COLORS.disabled
+    end)
+    
+    -- Кнопка 2: Toggle Aimbot
+    local aimbotButton = createMobileButton("🎯 Aimbot: OFF", 95, function(btn)
+        isAimbotEnabled = not isAimbotEnabled
+        if guiElements and guiElements.aimbotButton then
+            updateButtonTextColor(guiElements.aimbotButton, isAimbotEnabled)
+        end
+        btn.Text = "🎯 Aimbot: " .. (isAimbotEnabled and "ON" or "OFF")
+        btn.BackgroundColor3 = isAimbotEnabled and GUI_COLORS.enabled or GUI_COLORS.disabled
+        showNotification("RAGE Aimbot " .. (isAimbotEnabled and "Enabled!" or "Disabled!"))
+        
+        -- Если аимбот включен, автоматически активируем прицеливание на мобильном
+        if isAimbotEnabled then
+            startAiming()
+        else
+            stopAiming()
+        end
+    end)
+    
+    -- Кнопка 3: Toggle Strafe
+    local strafeButton = createMobileButton("💨 Strafe: OFF", 150, function(btn)
+        if isStrafeEnabled then
+            stopStrafe()
+        else
+            startStrafe()
+        end
+        if guiElements and guiElements.strafeButton then
+            updateButtonTextColor(guiElements.strafeButton, isStrafeEnabled)
+        end
+        btn.Text = "💨 Strafe: " .. (isStrafeEnabled and "ON" or "OFF")
+        btn.BackgroundColor3 = isStrafeEnabled and GUI_COLORS.enabled or GUI_COLORS.disabled
+    end)
+    
+    -- Обновляем цвета кнопок при создании
+    guiButton.BackgroundColor3 = isGUIVisible and GUI_COLORS.enabled or GUI_COLORS.disabled
+    aimbotButton.BackgroundColor3 = isAimbotEnabled and GUI_COLORS.enabled or GUI_COLORS.disabled
+    strafeButton.BackgroundColor3 = isStrafeEnabled and GUI_COLORS.enabled or GUI_COLORS.disabled
+    
+    -- Делаем контейнер перетаскиваемым
+    local dragging = false
+    local dragInput, dragStart, startPos
+    
+    container.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = container.Position
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    
+    container.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
+            dragInput = input
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            container.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+    
+    showNotification("Quick Controls Loaded!")
+end
 
 -- Функция для копирования текста в буфер обмена
 local function copyToClipboard(text)
@@ -4642,6 +4806,9 @@ local function initialize()
         
         -- Настройка обработчиков кнопок
         setupButtonHandlers()
+        
+        -- Создаем быстрые кнопки управления
+        createMobileControls()
         
         -- Обновляем статус Discord после загрузки
         pcall(function()
