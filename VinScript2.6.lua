@@ -476,9 +476,105 @@ local originalSkybox = nil
 local guiElements = nil
 local settingsFrames = {}
 local mobileControlsGui = nil
+local debugLog = {}
+local debugLogGui = nil
+
+-- Функция для добавления сообщений в визуальный лог
+local function addDebugLog(message)
+    print(message)  -- Также выводим в консоль
+    table.insert(debugLog, 1, message)  -- Добавляем в начало
+    
+    -- Ограничиваем до 15 строк
+    while #debugLog > 15 do
+        table.remove(debugLog)
+    end
+    
+    -- Обновляем GUI
+    if debugLogGui and debugLogGui:FindFirstChild("LogText") then
+        local logText = debugLogGui.LogText
+        logText.Text = table.concat(debugLog, "\n")
+    end
+end
+
+-- Создание визуального лога
+local function createDebugLog()
+    if debugLogGui then
+        debugLogGui:Destroy()
+    end
+    
+    debugLogGui = Instance.new("ScreenGui")
+    debugLogGui.Name = "DebugLog"
+    debugLogGui.ResetOnSpawn = false
+    debugLogGui.DisplayOrder = 1000
+    debugLogGui.Parent = game:GetService("CoreGui")
+    
+    local logFrame = Instance.new("Frame")
+    logFrame.Size = UDim2.new(0, 400, 0, 300)
+    logFrame.Position = UDim2.new(0, 10, 0, 10)
+    logFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+    logFrame.BackgroundTransparency = 0.3
+    logFrame.BorderSizePixel = 0
+    logFrame.Parent = debugLogGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = logFrame
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -30, 0, 25)
+    title.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    title.BackgroundTransparency = 0.2
+    title.Text = "🔍 Debug Log"
+    title.TextColor3 = Color3.fromRGB(101, 218, 255)
+    title.TextSize = 14
+    title.Font = Enum.Font.GothamBold
+    title.Parent = logFrame
+    
+    local titleCorner = Instance.new("UICorner")
+    titleCorner.CornerRadius = UDim.new(0, 8)
+    titleCorner.Parent = title
+    
+    -- Кнопка закрытия
+    local closeButton = Instance.new("TextButton")
+    closeButton.Size = UDim2.new(0, 25, 0, 25)
+    closeButton.Position = UDim2.new(1, -25, 0, 0)
+    closeButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    closeButton.BackgroundTransparency = 0.2
+    closeButton.Text = "×"
+    closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeButton.TextSize = 18
+    closeButton.Font = Enum.Font.GothamBold
+    closeButton.Parent = logFrame
+    
+    local closeBtnCorner = Instance.new("UICorner")
+    closeBtnCorner.CornerRadius = UDim.new(0, 8)
+    closeBtnCorner.Parent = closeButton
+    
+    closeButton.MouseButton1Click:Connect(function()
+        debugLogGui:Destroy()
+        debugLogGui = nil
+    end)
+    
+    local logText = Instance.new("TextLabel")
+    logText.Name = "LogText"
+    logText.Size = UDim2.new(1, -10, 1, -30)
+    logText.Position = UDim2.new(0, 5, 0, 25)
+    logText.BackgroundTransparency = 1
+    logText.Text = "Waiting for events..."
+    logText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    logText.TextSize = 11
+    logText.Font = Enum.Font.Code
+    logText.TextXAlignment = Enum.TextXAlignment.Left
+    logText.TextYAlignment = Enum.TextYAlignment.Top
+    logText.TextWrapped = true
+    logText.Parent = logFrame
+    
+    addDebugLog("Debug log initialized")
+end
 
 -- Создание мобильных кнопок управления (доступны всегда)
 local function createMobileControls()
+    addDebugLog("=== Starting createMobileControls ===")
     
     -- Удаляем старое меню если есть
     if mobileControlsGui then
@@ -489,7 +585,9 @@ local function createMobileControls()
     mobileControlsGui.Name = "MobileControls"
     mobileControlsGui.ResetOnSpawn = false
     mobileControlsGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    mobileControlsGui.DisplayOrder = 999  -- Делаем GUI поверх всего
     mobileControlsGui.Parent = game:GetService("CoreGui")
+    addDebugLog("ScreenGui created")
     
     -- Контейнер для кнопок
     local container = Instance.new("Frame")
@@ -497,9 +595,12 @@ local function createMobileControls()
     container.Size = UDim2.new(0, 180, 0, 200)
     container.Position = UDim2.new(1, -190, 0.5, -100)
     container.BackgroundColor3 = GUI_COLORS.mainBackground
-    container.BackgroundTransparency = 0.3
+    container.BackgroundTransparency = 0.2
     container.BorderSizePixel = 0
+    container.Active = true  -- Делаем контейнер активным
+    container.ZIndex = 10
     container.Parent = mobileControlsGui
+    addDebugLog("Container created")
     
     local containerCorner = Instance.new("UICorner")
     containerCorner.CornerRadius = UDim.new(0, 12)
@@ -511,16 +612,22 @@ local function createMobileControls()
     containerStroke.Transparency = 0.5
     containerStroke.Parent = container
     
-    -- Заголовок
+    -- Заголовок (для перетаскивания) - используем Frame вместо TextLabel
+    local titleFrame = Instance.new("Frame")
+    titleFrame.Size = UDim2.new(1, 0, 0, 30)
+    titleFrame.Position = UDim2.new(0, 0, 0, 5)
+    titleFrame.BackgroundTransparency = 1
+    titleFrame.Active = true
+    titleFrame.Parent = container
+    
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 30)
-    title.Position = UDim2.new(0, 0, 0, 5)
+    title.Size = UDim2.new(1, 0, 1, 0)
     title.BackgroundTransparency = 1
     title.Text = "⚡ Quick Controls"
     title.TextColor3 = GUI_COLORS.title
     title.TextSize = 14
     title.Font = Enum.Font.GothamBold
-    title.Parent = container
+    title.Parent = titleFrame
     
     -- Функция создания кнопки
     local function createMobileButton(text, yPos, callback)
@@ -534,6 +641,8 @@ local function createMobileControls()
         button.TextSize = 13
         button.Font = Enum.Font.GothamBold
         button.BorderSizePixel = 0
+        button.Active = true  -- Делаем кнопку активной
+        button.ZIndex = 11  -- Кнопки должны быть выше контейнера
         button.Parent = container
         
         local btnCorner = Instance.new("UICorner")
@@ -546,66 +655,105 @@ local function createMobileControls()
         btnStroke.Transparency = 0.7
         btnStroke.Parent = button
         
+        -- Добавляем обработчик нажатия
         button.MouseButton1Click:Connect(function()
-            animateButtonClick(button)
-            callback(button)
+            addDebugLog(">>> Click: " .. text)
+            pcall(function()
+                animateButtonClick(button)
+            end)
+            pcall(function()
+                callback(button)
+            end)
         end)
         
+        -- Дополнительный обработчик для мобильных устройств
+        button.Activated:Connect(function()
+            addDebugLog(">>> Touch: " .. text)
+            pcall(function()
+                callback(button)
+            end)
+        end)
+        
+        addDebugLog("Created: " .. text)
         return button
     end
     
     -- Кнопка 1: Toggle GUI
     local guiButton = createMobileButton("🖥️ Toggle GUI", 40, function(btn)
+        addDebugLog("GUI callback fired")
         isGUIVisible = not isGUIVisible
         if guiElements and guiElements.mainPanel then
             guiElements.mainPanel.Visible = isGUIVisible
             showNotification("GUI " .. (isGUIVisible and "Enabled!" or "Disabled!"))
+            addDebugLog("GUI: " .. (isGUIVisible and "ON" or "OFF"))
+        else
+            addDebugLog("ERROR: GUI not found!")
         end
         btn.BackgroundColor3 = isGUIVisible and GUI_COLORS.enabled or GUI_COLORS.disabled
     end)
     
-    -- Кнопка 2: Toggle Aimbot
-    local aimbotButton = createMobileButton("🎯 Aimbot: OFF", 95, function(btn)
-        isAimbotEnabled = not isAimbotEnabled
-        if guiElements and guiElements.aimbotButton then
-            updateButtonTextColor(guiElements.aimbotButton, isAimbotEnabled)
-        end
-        btn.Text = "🎯 Aimbot: " .. (isAimbotEnabled and "ON" or "OFF")
-        btn.BackgroundColor3 = isAimbotEnabled and GUI_COLORS.enabled or GUI_COLORS.disabled
-        showNotification("RAGE Aimbot " .. (isAimbotEnabled and "Enabled!" or "Disabled!"))
+    -- Кнопка 2: Toggle Aiming (работает как правая кнопка мыши)
+    local aimbotButton = createMobileButton("🎯 Aim: OFF", 95, function(btn)
+        addDebugLog("Aim callback fired")
         
-        -- Если аимбот включен, автоматически активируем прицеливание на мобильном
-        if isAimbotEnabled then
-            startAiming()
-        else
-            stopAiming()
+        if not isAimbotEnabled then
+            addDebugLog("ERROR: Enable Aimbot first")
+            showNotification("Enable RAGE Aimbot first!")
+            btn.Text = "🎯 Aim: OFF"
+            btn.BackgroundColor3 = GUI_COLORS.disabled
+            return
         end
+        
+        if isAiming then
+            stopAiming()
+            addDebugLog("Stopped aiming")
+        else
+            startAiming()
+            addDebugLog("Started aiming")
+        end
+        
+        task.wait(0.1)
+        btn.Text = isAiming and "🎯 Aim: ON" or "🎯 Aim: OFF"
+        btn.BackgroundColor3 = isAiming and GUI_COLORS.enabled or GUI_COLORS.disabled
+        addDebugLog("Aim: " .. (isAiming and "ON" or "OFF"))
     end)
     
     -- Кнопка 3: Toggle Strafe
     local strafeButton = createMobileButton("💨 Strafe: OFF", 150, function(btn)
+        addDebugLog("Strafe callback fired")
+        
         if isStrafeEnabled then
             stopStrafe()
+            addDebugLog("Stopped strafe")
         else
             startStrafe()
+            addDebugLog("Started strafe")
         end
+        
+        task.wait(0.1)
+        btn.Text = isStrafeEnabled and "💨 Strafe: ON" or "💨 Strafe: OFF"
+        btn.BackgroundColor3 = isStrafeEnabled and GUI_COLORS.enabled or GUI_COLORS.disabled
+        addDebugLog("Strafe: " .. (isStrafeEnabled and "ON" or "OFF"))
+        
         if guiElements and guiElements.strafeButton then
             updateButtonTextColor(guiElements.strafeButton, isStrafeEnabled)
         end
-        btn.Text = "💨 Strafe: " .. (isStrafeEnabled and "ON" or "OFF")
-        btn.BackgroundColor3 = isStrafeEnabled and GUI_COLORS.enabled or GUI_COLORS.disabled
     end)
     
     -- Обновляем цвета кнопок при создании
     guiButton.BackgroundColor3 = isGUIVisible and GUI_COLORS.enabled or GUI_COLORS.disabled
-    aimbotButton.BackgroundColor3 = isAimbotEnabled and GUI_COLORS.enabled or GUI_COLORS.disabled
+    aimbotButton.BackgroundColor3 = isAiming and GUI_COLORS.enabled or GUI_COLORS.disabled
     strafeButton.BackgroundColor3 = isStrafeEnabled and GUI_COLORS.enabled or GUI_COLORS.disabled
     
-    -- Делаем контейнер перетаскиваемым
+    -- Обновляем текст кнопок
+    aimbotButton.Text = "🎯 Aim: " .. (isAiming and "ON" or "OFF")
+    strafeButton.Text = "💨 Strafe: " .. (isStrafeEnabled and "ON" or "OFF")
+    
+    -- Делаем ТОЛЬКО ЗАГОЛОВОК перетаскиваемым (не весь контейнер)
     local dragging = false
     local dragInput, dragStart, startPos
     
-    container.InputBegan:Connect(function(input)
+    titleFrame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = true
             dragStart = input.Position
@@ -619,7 +767,7 @@ local function createMobileControls()
         end
     end)
     
-    container.InputChanged:Connect(function(input)
+    titleFrame.InputChanged:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
             dragInput = input
         end
@@ -637,7 +785,8 @@ local function createMobileControls()
         end
     end)
     
-    showNotification("Quick Controls Loaded!")
+    addDebugLog("=== Controls Ready ===")
+    showNotification("Quick Controls Ready!")
 end
 
 -- Функция для копирования текста в буфер обмена
@@ -1783,12 +1932,18 @@ end
 
 -- Strafe функция с FastStop (скорость 27)
 local function startStrafe()
-    if not player.Character then return end
+    isStrafeEnabled = true
+    
+    if not player.Character then 
+        showNotification("Strafe Enabled! Spawn to apply")
+        return 
+    end
     
     local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return end
-    
-    isStrafeEnabled = true
+    if not humanoid then 
+        showNotification("Strafe Enabled! Spawn to apply")
+        return 
+    end
     
     if not humanoid:FindFirstChild("OriginalWalkSpeed") then
         local originalWalkSpeed = Instance.new("NumberValue")
@@ -1831,12 +1986,18 @@ local function startStrafe()
 end
 
 local function stopStrafe()
-    if not player.Character then return end
+    isStrafeEnabled = false
+    
+    if not player.Character then 
+        showNotification("Strafe Disabled!")
+        return 
+    end
     
     local humanoid = player.Character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return end
-    
-    isStrafeEnabled = false
+    if not humanoid then 
+        showNotification("Strafe Disabled!")
+        return 
+    end
     
     local originalWalkSpeed = humanoid:FindFirstChild("OriginalWalkSpeed")
     if originalWalkSpeed then
@@ -4807,7 +4968,12 @@ local function initialize()
         -- Настройка обработчиков кнопок
         setupButtonHandlers()
         
+        -- Создаем визуальный лог отладки
+        task.wait(0.3)
+        createDebugLog()
+        
         -- Создаем быстрые кнопки управления
+        task.wait(0.3) -- Даем время на инициализацию GUI
         createMobileControls()
         
         -- Обновляем статус Discord после загрузки
